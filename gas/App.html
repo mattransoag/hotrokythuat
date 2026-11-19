@@ -35,8 +35,6 @@ function renderAdminTickets(){
   const progress=document.createElement('select');['Chờ tiếp nhận','Đang tiến hành','Hoàn thành'].forEach(v=>progress.add(new Option(v,v)));progress.value=item.progress||(item.status==='Hoàn thành'?'Hoàn thành':item.status==='Đang xử lý'?'Đang tiến hành':'Chờ tiếp nhận');makeField('Tiến độ thực hiện',progress);
   const numberField=(title,value,max)=>{const el=document.createElement('input');el.type='number';el.min='0';el.step='1';if(max!=null)el.max=String(max);el.value=value===undefined||value===null?'':value;makeField(title,el);return el};
   const completion=numberField('Tỷ lệ hoàn thành (%)',item.completion,100);
-  const digitalCount=numberField('Số văn bản điện tử',item.digitalCount);
-  const documentCount=numberField('Tổng số văn bản',item.documentCount);
   select.addEventListener('change',()=>{if(select.value==='Hoàn thành'){progress.value='Hoàn thành';completion.value='100'}});
   const button=document.createElement('button');button.textContent='Lưu cập nhật';
   button.onclick=()=>{
@@ -46,7 +44,7 @@ function renderAdminTickets(){
    google.script.run.withSuccessHandler(r=>{
     button.disabled=false;button.textContent='Lưu cập nhật';
     if(!r||!r.ok){msg('adminMsg','Chưa xác nhận được kết quả lưu. Vui lòng thử làm mới.',true);return}
-    item.status=nextStatus;item.result=nextResult;item.supportForm=supportForm.value;item.progress=progress.value;item.completion=completion.value;item.digitalCount=digitalCount.value;item.documentCount=documentCount.value;
+    item.status=nextStatus;item.result=nextResult;item.supportForm=supportForm.value;item.progress=progress.value;item.completion=completion.value;
     statusBadge.textContent=nextStatus;statusBadge.dataset.status=nextStatus;
     if(r.unchanged){msg('adminMsg','Hồ sơ không có thay đổi.');return}
     const note=r.mailSent?'Đã lưu '+nextStatus+'. Hồ sơ hoàn thành được chuyển khỏi danh sách cần xử lý và đã gửi lệnh thông báo Gmail.':'Đã lưu '+nextStatus+'. Hồ sơ hoàn thành được chuyển khỏi danh sách cần xử lý nhưng Gmail chưa gửi được: '+(r.mailError||'Vui lòng kiểm tra LichSu');
@@ -54,7 +52,7 @@ function renderAdminTickets(){
     const filter=document.getElementById('adminFilter');
     if(nextStatus==='Hoàn thành')filter.value='active';
     loadAdmin(note);
-   }).withFailureHandler(e=>{button.disabled=false;button.textContent='Lưu cập nhật';msg('adminMsg',e.message,true)}).adminUpdateTicket(adminToken,item.id,nextStatus,nextResult,{supportForm:supportForm.value,progress:progress.value,completion:completion.value,digitalCount:digitalCount.value,documentCount:documentCount.value})
+   }).withFailureHandler(e=>{button.disabled=false;button.textContent='Lưu cập nhật';msg('adminMsg',e.message,true)}).adminUpdateTicket(adminToken,item.id,nextStatus,nextResult,{supportForm:supportForm.value,progress:progress.value,completion:completion.value,digitalCount:item.digitalCount??'',documentCount:item.documentCount??''})
   };
   card.append(select,result,reportBox,button);list.appendChild(card);
  })
