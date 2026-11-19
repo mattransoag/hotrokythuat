@@ -189,4 +189,4 @@ function getPublicVisitStats(visitorId){
   return {today:Number(props.getProperty(dailyKey)||0),total:Number(props.getProperty(totalKey)||0)};
  }finally{lock.releaseLock()}
 }
-function doGet(e){const t=HtmlService.createTemplateFromFile('App');t.entryView=e&&e.parameter&&['send','lookup','admin'].includes(e.parameter.view)?e.parameter.view:'send';return t.evaluate().setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
+function doGet(e){const t=HtmlService.createTemplateFromFile('App');t.visitorId=e&&e.parameter?String(e.parameter.visitor||''):'';t.entryView=e&&e.parameter&&['send','lookup','admin'].includes(e.parameter.view)?e.parameter.view:'send';return t.evaluate().setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
