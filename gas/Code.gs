@@ -1,15 +1,16 @@
-/** MTTQ An Giang - backend V3.1. Chạy setup() một lần trong Apps Script gắn với Sheet riêng. */
+/** MTTQ An Giang - backend V3.2. Chạy setup() một lần trong Apps Script gắn với Sheet riêng. */
 const SHEETS={TICKETS:'YeuCau',LOG:'LichSu',SETTINGS:'CauHinh'};
-const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao'];
+const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao','AnhMinhChung','NguoiPhuTrach','GhiChuNoiBo'];
 const STATUS=['Chờ tiếp nhận','Đang xử lý','Hoàn thành'];
 function setup(){
  const ss=SpreadsheetApp.getActiveSpreadsheet();if(!ss)throw Error('Hãy mở Apps Script từ Google Sheets mới.');
  let sh=ss.getSheetByName(SHEETS.TICKETS)||ss.insertSheet(SHEETS.TICKETS);
- if(sh.getLastRow()===0){sh.appendRow(HEADERS);sh.setFrozenRows(1);sh.getRange('A:A').setNumberFormat('@');sh.getRange('B:B').setNumberFormat('@');}
+ if(sh.getLastRow()===0){sh.appendRow(HEADERS);sh.setFrozenRows(1);sh.getRange('A:A').setNumberFormat('@');sh.getRange('B:B').setNumberFormat('@');}else{const existing=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];HEADERS.forEach((h,i)=>{if(!existing[i])sh.getRange(1,i+1).setValue(h)})}
  let log=ss.getSheetByName(SHEETS.LOG)||ss.insertSheet(SHEETS.LOG);if(!log.getLastRow())log.appendRow(['ThoiGian','MaPhieu','HanhDong','ChiTiet']);
  let cfg=ss.getSheetByName(SHEETS.SETTINGS)||ss.insertSheet(SHEETS.SETTINGS);if(!cfg.getLastRow())cfg.appendRow(['ThietLap','GiaTri']);
  const validation=SpreadsheetApp.newDataValidation().requireValueInList(STATUS,true).setAllowInvalid(false).build();sh.getRange('L2:L').setDataValidation(validation);
  PropertiesService.getScriptProperties().setProperty('SHEET_ID',ss.getId());
+ const props=PropertiesService.getScriptProperties();if(!props.getProperty('EVIDENCE_FOLDER_ID')){const folder=DriveApp.createFolder('MTTQ An Giang - Minh chung ho so');props.setProperty('EVIDENCE_FOLDER_ID',folder.getId())}
  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='onTicketEdit').forEach(t=>ScriptApp.deleteTrigger(t));
  ScriptApp.newTrigger('onTicketEdit').forSpreadsheet(ss).onEdit().create();
  return 'Đã tạo các trang YeuCau, LichSu, CauHinh và trình kích hoạt thông báo.';
@@ -28,12 +29,29 @@ function submitTicket(p){
  let id,code;try{
   const sh=db().getSheetByName(SHEETS.TICKETS);id='AG-'+Utilities.formatDate(new Date(),'Asia/Ho_Chi_Minh','yyyyMMdd')+'-'+Utilities.getUuid().slice(0,8).toUpperCase();
   code=Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();
-  sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),'']);
+  const attachment=saveEvidence_(p.image,id);
+  try{sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),' ',attachment.url,'','']);}catch(err){if(attachment.fileId)DriveApp.getFileById(attachment.fileId).setTrashed(true);throw err}
  }finally{lock.releaseLock()}
  logTicket(id,'Tiếp nhận','Yêu cầu mới');
  let mailed=false;
  try{MailApp.sendEmail({to:email,subject:'[MTTQ An Giang] Đã tiếp nhận yêu cầu '+id,body:'Kính gửi '+name+',\n\nYêu cầu hỗ trợ của anh/chị đã được tiếp nhận.\nMã phiếu: '+id+'\nMã xác thực: '+code+'\n\nVui lòng giữ kín mã xác thực. Tra cứu tại https://mattransoag.github.io/hotrokythuat/\n\nỦy ban MTTQ Việt Nam tỉnh An Giang.'});mailed=true;}catch(e){logTicket(id,'Lỗi gửi Gmail',String(e).slice(0,250))}
  return {ok:true,id:id,verificationCode:code,emailSent:mailed};
+}
+/** Ảnh chỉ lưu riêng tư trong Drive; không cấp quyền 'anyone with link'. */
+function saveEvidence_(image,id){
+ if(!image)return {url:'',fileId:''};
+ if(typeof image!=='object'||typeof image.data!=='string')throw Error('Ảnh minh chứng không hợp lệ');
+ const type=String(image.type||'');
+ const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[type];
+ if(!ext)throw Error('Chỉ nhận ảnh JPG, PNG hoặc WebP');
+ if(image.data.length>4200000)throw Error('Ảnh vượt quá 3 MB');
+ let bytes;try{bytes=Utilities.base64Decode(image.data)}catch(e){throw Error('Dữ liệu ảnh không hợp lệ')}
+ if(bytes.length>3*1024*1024)throw Error('Ảnh vượt quá 3 MB');
+ const folderId=PropertiesService.getScriptProperties().getProperty('EVIDENCE_FOLDER_ID');
+ if(!folderId)throw Error('Chưa chạy setup() để tạo thư mục minh chứng');
+ const blob=Utilities.newBlob(bytes,type,id+'.'+ext);
+ const file=DriveApp.getFolderById(folderId).createFile(blob);
+ return {url:file.getUrl(),fileId:file.getId()};
 }
 function lookupTicket(id,code){
  id=clean(id,50).toUpperCase();code=clean(code,80).toUpperCase();
