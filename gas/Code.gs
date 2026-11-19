@@ -108,4 +108,44 @@ function notifyTicketRow_(sh,row){
  sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);
  try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date())}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250))}
 }
+
+/** Admin duy nhất: cấu hình ADMIN_PASSWORD trong Script Properties, tuyệt đối không lưu vào GitHub. */
+function adminLogin(username,password){
+ if(String(username)!=='admin')throw Error('Sai tên đăng nhập hoặc mật khẩu');
+ const configured=PropertiesService.getScriptProperties().getProperty('ADMIN_PASSWORD');
+ if(!configured)throw Error('Admin chưa được cấu hình. Vào Project Settings → Script properties.');
+ const attempts=CacheService.getScriptCache(),key='admin_failed_count',failed=Number(attempts.get(key)||0);
+ if(failed>=10)throw Error('Đăng nhập tạm khóa 15 phút. Vui lòng thử lại sau.');
+ if(String(password)!==configured){attempts.put(key,String(failed+1),900);throw Error('Sai tên đăng nhập hoặc mật khẩu')}
+ attempts.remove(key);
+ const token=Utilities.getUuid()+Utilities.getUuid();
+ attempts.put('admin_session_'+token,'1',1200);
+ return {token,expiresMinutes:20};
+}
+function requireAdmin_(token){
+ if(typeof token!=='string'||!/^[-a-f0-9]{72}$/.test(token)||CacheService.getScriptCache().get('admin_session_'+token)!=='1')throw Error('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
+}
+function adminLogout(token){if(typeof token==='string')CacheService.getScriptCache().remove('admin_session_'+token);return true}
+function adminListTickets(token){
+ requireAdmin_(token);
+ const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
+ const rows=last<2?[]:sh.getRange(Math.max(2,last-199),1,Math.min(last-1,200),HEADERS.length).getValues();
+ const items=rows.reverse().map(r=>({id:String(r[0]),date:String(r[2]),name:String(r[3]),unit:String(r[4]),email:String(r[5]),category:String(r[7]),subject:String(r[9]),detail:String(r[10]),status:String(r[11]),result:String(r[12]||''),image:String(r[15]||''),imageResult:String(r[19]||'')}));
+ const statuses=last<2?[]:sh.getRange(2,12,last-1,1).getValues().map(r=>r[0]);
+ return {items,stats:{total:last-1,pending:statuses.filter(x=>x==='Chờ tiếp nhận').length,working:statuses.filter(x=>x==='Đang xử lý').length,done:statuses.filter(x=>x==='Hoàn thành').length}};
+}
+function adminUpdateTicket(token,id,status,result){
+ requireAdmin_(token);id=clean(id,50);result=clean(result,5000);
+ if(!STATUS.includes(status))throw Error('Trạng thái không hợp lệ');
+ if(status==='Hoàn thành'&&!result)throw Error('Cần nhập kết quả trước khi hoàn thành');
+ const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
+ if(last<2)throw Error('Không tìm thấy hồ sơ');
+ const ids=sh.getRange(2,1,last-1,1).getDisplayValues(),i=ids.findIndex(r=>r[0]===id);
+ if(i<0)throw Error('Không tìm thấy hồ sơ');
+ const row=i+2;sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
+ sh.getRange(row,19).setValue(status==='Hoàn thành');
+ notifyTicketRow_(sh,row);
+ return {ok:true};
+}
+
 function doGet(){return HtmlService.createHtmlOutputFromFile('App').setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
