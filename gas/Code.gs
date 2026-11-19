@@ -118,10 +118,13 @@ function setQuickResult_(message){const o=selectedTicketRow_();o.sh.getRange(o.r
 function completeSelected_(){const o=selectedTicketRow_();o.sh.getRange(o.row,19).setValue(true);notifyTicketRow_(o.sh,o.row)}
 function onTicketEdit(e){
  if(!e||!e.range||e.range.getSheet().getName()!==SHEETS.TICKETS||e.range.getRow()<2)return;
- const col=e.range.getColumn();if(![12,13,19].includes(col))return;
+ const col=e.range.getColumn();if(![12,13,19,21,22,23,24,25].includes(col))return;
  const sh=e.range.getSheet(),row=e.range.getRow();
+ if([21,22,23,24,25].includes(col)){setupSupportReport_(db());return}
  if(col===19&&e.range.getValue()!==true)return;
  if(col===13)return; // ghi kết quả trước, chỉ gửi khi thay đổi trạng thái hoặc hoàn thành
+ if(sh.getRange(row,12).getValue()==='Hoàn thành'){sh.getRange(row,22).setValue('Hoàn thành');sh.getRange(row,23).setValue(100);if(!sh.getRange(row,27).getValue())sh.getRange(row,27).setValue(new Date())}else if(col===12){sh.getRange(row,22).setValue(sh.getRange(row,12).getValue()==='Đang xử lý'?'Đang tiến hành':'Chờ tiếp nhận')}
+ setupSupportReport_(db());
  notifyTicketRow_(sh,row);
 }
 function notifyTicketRow_(sh,row){
@@ -129,7 +132,7 @@ function notifyTicketRow_(sh,row){
  if(r[18]===true){if(!String(r[12]||'').trim()){sh.getRange(row,19).setValue(false);throw Error('Vui lòng nhập Kết quả xử lý (cột M) trước khi hoàn thành.')}sh.getRange(row,12).setValue('Hoàn thành')}
  if(!STATUS.includes(sh.getRange(row,12).getValue()))return;
  const status=sh.getRange(row,12).getValue(),result=String(sh.getRange(row,13).getValue()||'');
- sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);refreshDashboard_(db());
+ sh.getRange(row,14).setValue(new Date());setupSupportReport_(db());logTicket(r[0],'Cập nhật trạng thái',status);refreshDashboard_(db());
  try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date());return {mailSent:true}}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250));return {mailSent:false,mailError:String(err).slice(0,250)}}
 }
 
