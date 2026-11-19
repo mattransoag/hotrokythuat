@@ -126,7 +126,7 @@ function requireAdmin_(token){
  if(typeof token!=='string'||!/^[-a-f0-9]{72}$/.test(token)||CacheService.getScriptCache().get('admin_session_'+token)!=='1')throw Error('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
 }
 function adminLogout(token){if(typeof token==='string')CacheService.getScriptCache().remove('admin_session_'+token);return true}
-function validTicketId_(id){return /^AG-\\d{8}-[A-F0-9]{8}$/.test(String(id||'').trim())}
+function validTicketId_(id){return /^AG-\d{8}-[A-F0-9]{8}$/.test(String(id||'').trim())}
 function adminListTickets(token){
  requireAdmin_(token);
  const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
