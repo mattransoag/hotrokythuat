@@ -117,7 +117,7 @@ function notifyTicketRow_(sh,row){
  if(!STATUS.includes(sh.getRange(row,12).getValue()))return;
  const status=sh.getRange(row,12).getValue(),result=String(sh.getRange(row,13).getValue()||'');
  sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);refreshDashboard_(db());
- try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date())}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250))}
+ try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date());return {mailSent:true}}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250));return {mailSent:false,mailError:String(err).slice(0,250)}}
 }
 
 /** Admin duy nhất: cấu hình ADMIN_PASSWORD trong Script Properties, tuyệt đối không lưu vào GitHub. */
@@ -163,8 +163,8 @@ function adminUpdateTicket(token,id,status,result){
  if(i<0||!validTicketId_(id))throw Error('Không tìm thấy hồ sơ');
  const row=i+2;const previous=sh.getRange(row,12,1,2).getDisplayValues()[0];if(previous[0]===status&&previous[1]===result)return {ok:true,unchanged:true};sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
  sh.getRange(row,19).setValue(status==='Hoàn thành');
- notifyTicketRow_(sh,row);
- return {ok:true};
+ const notification=notifyTicketRow_(sh,row);
+ return {ok:true,mailSent:!!(notification&&notification.mailSent),mailError:notification&&notification.mailError||''};
 }
 
 function doGet(){return HtmlService.createHtmlOutputFromFile('App').setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
