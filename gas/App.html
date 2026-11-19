@@ -26,7 +26,7 @@ function renderAdminTickets(){
   const select=document.createElement('select');['Chờ tiếp nhận','Đang xử lý','Hoàn thành'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v;select.appendChild(op)});select.value=item.status;
   const result=document.createElement('textarea');result.placeholder='Nhập kết quả xử lý';result.value=item.result;
   const button=document.createElement('button');button.textContent='Lưu cập nhật';
-  button.onclick=()=>{if(select.value==='Hoàn thành'&&!result.value.trim()){msg('adminMsg','Cần nhập kết quả xử lý trước khi hoàn thành.',true);return}button.disabled=true;google.script.run.withSuccessHandler(()=>{button.disabled=false;msg('adminMsg','Đã lưu hồ sơ '+item.id);loadAdmin()}).withFailureHandler(e=>{button.disabled=false;msg('adminMsg',e.message,true)}).adminUpdateTicket(adminToken,item.id,select.value,result.value)};
+  button.onclick=()=>{if(select.value==='Hoàn thành'&&!result.value.trim()){msg('adminMsg','Cần nhập kết quả xử lý trước khi hoàn thành.',true);return}button.disabled=true;google.script.run.withSuccessHandler(r=>{button.disabled=false;loadAdmin();setTimeout(()=>msg('adminMsg',r.unchanged?'Hồ sơ không thay đổi.':r.mailSent?'Đã lưu hồ sơ và gửi lệnh thông báo Gmail cho '+item.email:'Đã lưu hồ sơ nhưng Gmail chưa gửi được: '+(r.mailError||'Vui lòng kiểm tra Nhật ký LichSu'),!r.unchanged&&!r.mailSent),350)}).withFailureHandler(e=>{button.disabled=false;msg('adminMsg',e.message,true)}).adminUpdateTicket(adminToken,item.id,select.value,result.value)};
   card.append(select,result,button);list.appendChild(card);
  })
 }
