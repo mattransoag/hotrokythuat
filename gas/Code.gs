@@ -1,6 +1,6 @@
 /** MTTQ An Giang - backend V3.4 – Một Admin. Chạy setup() một lần trong Apps Script gắn với Sheet riêng. */
-const SHEETS={TICKETS:'YeuCau',LOG:'LichSu',SETTINGS:'CauHinh',DASH:'TongQuan'};
-const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao','AnhMinhChung','NguoiPhuTrach','GhiChuNoiBo','HoanThanh','AnhKetQua'];
+const SHEETS={TICKETS:'YeuCau',LOG:'LichSu',SETTINGS:'CauHinh',DASH:'TongQuan',REPORT:'BaoCaoHoTro'};
+const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao','AnhMinhChung','NguoiPhuTrach','GhiChuNoiBo','HoanThanh','AnhKetQua','HinhThucHoTro','TienDoThucHien','TyLeHoanThanh','SoVanBanDienTu','TongVanBan','TyLeVBDT','NgayHoanThanh'];
 const STATUS=['Chờ tiếp nhận','Đang xử lý','Hoàn thành'];
 function setup(){
  const ss=SpreadsheetApp.getActiveSpreadsheet();if(!ss)throw Error('Hãy mở Apps Script từ Google Sheets mới.');
@@ -10,14 +10,27 @@ function setup(){
  let cfg=ss.getSheetByName(SHEETS.SETTINGS)||ss.insertSheet(SHEETS.SETTINGS);if(!cfg.getLastRow())cfg.appendRow(['ThietLap','GiaTri']);
  const validation=SpreadsheetApp.newDataValidation().requireValueInList(STATUS,true).setAllowInvalid(false).build();sh.getRange('L2:L').setDataValidation(validation);
  sh.getRange('S2:S').insertCheckboxes();
- sh.getRange('A1:T1').setFontWeight('bold').setBackground('#b91c1c').setFontColor('#ffffff');
+ sh.getRange(1,1,1,HEADERS.length).setFontWeight('bold').setBackground('#b91c1c').setFontColor('#ffffff');
  sh.setFrozenRows(1);if(!sh.getFilter())sh.getRange(1,1,Math.max(2,sh.getLastRow()),HEADERS.length).createFilter();
- createDashboard_(ss);
+ createDashboard_(ss);setupSupportReport_(ss);
  PropertiesService.getScriptProperties().setProperty('SHEET_ID',ss.getId());
  const props=PropertiesService.getScriptProperties();if(!props.getProperty('EVIDENCE_FOLDER_ID')){const folder=DriveApp.createFolder('MTTQ An Giang - Minh chung ho so');props.setProperty('EVIDENCE_FOLDER_ID',folder.getId())}
  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='onTicketEdit').forEach(t=>ScriptApp.deleteTrigger(t));
  ScriptApp.newTrigger('onTicketEdit').forSpreadsheet(ss).onEdit().create();
- return 'Đã thiết lập YeuCau, LichSu, CauHinh, TongQuan và checkbox HoanThanh.';
+ return 'Đã cập nhật YeuCau, BaoCaoHoTro, TongQuan; giữ nguyên hồ sơ cũ.';
+}
+const SUPPORT_FORMS=['Trực tuyến','Trực tiếp'];
+const PROGRESS=['Chờ tiếp nhận','Đang tiến hành','Hoàn thành'];
+function setupSupportReport_(ss){
+ let sh=ss.getSheetByName(SHEETS.REPORT)||ss.insertSheet(SHEETS.REPORT);
+ const heads=['STT','Mã phiếu','Đơn vị được hỗ trợ','Nội dung kỹ thuật hỗ trợ cụ thể','Hình thức','Tiến độ thực hiện','Tỷ lệ hoàn thành (%)','Số VBĐT','Tổng VB','Tỷ lệ VBĐT (%)','Kết quả xử lý','Ngày hoàn thành'];
+ sh.getRange(1,1,1,heads.length).setValues([heads]).setBackground('#b91c1c').setFontColor('#ffffff').setFontWeight('bold');
+ sh.setFrozenRows(1);sh.setColumnWidth(3,220);sh.setColumnWidth(4,360);sh.setColumnWidth(11,300);
+ const source=ss.getSheetByName(SHEETS.TICKETS),last=source.getLastRow();
+ const rows=last<2?[]:source.getRange(2,1,last-1,HEADERS.length).getValues().filter(r=>validTicketId_(r[0]));
+ const out=rows.map((r,i)=>[i+1,r[0],r[4],r[9]+(r[10]?' – '+r[10]:''),r[20]||'',r[21]|| (r[11]==='Hoàn thành'?'Hoàn thành':r[11]==='Đang xử lý'?'Đang tiến hành':'Chờ tiếp nhận'),r[22]===''?'':r[22],r[23]===''?'':r[23],r[24]===''?'':r[24],r[25]===''?'':r[25],r[12]||'',r[26]||'']);
+ if(sh.getLastRow()>1)sh.getRange(2,1,sh.getLastRow()-1,heads.length).clearContent();
+ if(out.length)sh.getRange(2,1,out.length,heads.length).setValues(out);
 }
 function db(){const id=PropertiesService.getScriptProperties().getProperty('SHEET_ID');if(!id)throw Error('Chưa chạy setup().');return SpreadsheetApp.openById(id)}
 function digest(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8).map(b=>('0'+(b&255).toString(16)).slice(-2)).join('')}
@@ -36,7 +49,7 @@ function submitTicket(p){
   const attachment=saveEvidence_(p.image,id);
   try{sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),'',attachment.url,'','',false,'']);}catch(err){if(attachment.fileId)DriveApp.getFileById(attachment.fileId).setTrashed(true);throw err}
  }finally{lock.releaseLock()}
- logTicket(id,'Tiếp nhận','Yêu cầu mới');refreshDashboard_(db());
+ logTicket(id,'Tiếp nhận','Yêu cầu mới');refreshDashboard_(db());setupSupportReport_(db());
  let mailed=false;
  try{MailApp.sendEmail({to:email,subject:'[MTTQ An Giang] Đã tiếp nhận yêu cầu '+id,body:'Kính gửi '+name+',\n\nYêu cầu hỗ trợ của anh/chị đã được tiếp nhận.\nMã phiếu: '+id+'\nMã xác thực: '+code+'\n\nVui lòng giữ kín mã xác thực. Tra cứu tại https://mattransoag.github.io/hotrokythuat/\n\nỦy ban MTTQ Việt Nam tỉnh An Giang.'});mailed=true;}catch(e){logTicket(id,'Lỗi gửi Gmail',String(e).slice(0,250))}
  return {ok:true,id:id,verificationCode:code,emailSent:mailed};
@@ -150,10 +163,10 @@ function adminListTickets(token){
  const statuses=sh.getRange(2,12,last-1,1).getDisplayValues();
  validRows.forEach(row=>{const status=statuses[row-2][0];if(status==='Chờ tiếp nhận')counts.pending++;else if(status==='Đang xử lý')counts.working++;else if(status==='Hoàn thành')counts.done++});
  const recent=validRows.slice(-200).reverse();
- const items=recent.map(row=>{const r=sh.getRange(row,1,1,HEADERS.length).getDisplayValues()[0];return {id:r[0],date:r[2],name:r[3],unit:r[4],email:r[5],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',image:r[15]||'',imageResult:r[19]||''}});
+ const items=recent.map(row=>{const r=sh.getRange(row,1,1,HEADERS.length).getDisplayValues()[0];return {id:r[0],date:r[2],name:r[3],unit:r[4],email:r[5],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',image:r[15]||'',imageResult:r[19]||'',supportForm:r[20]||'',progress:r[21]||'',completion:r[22]===''?'':r[22],digitalCount:r[23]===''?'':r[23],documentCount:r[24]===''?'':r[24],digitalRate:r[25]===''?'':r[25]}});
  refreshDashboard_(db());return {items,stats:counts};
 }
-function adminUpdateTicket(token,id,status,result){
+function adminUpdateTicket(token,id,status,result,report){
  requireAdmin_(token);id=clean(id,50);result=clean(result,5000);
  if(!STATUS.includes(status))throw Error('Trạng thái không hợp lệ');
  if(status==='Hoàn thành'&&!result)throw Error('Cần nhập kết quả trước khi hoàn thành');
@@ -161,8 +174,27 @@ function adminUpdateTicket(token,id,status,result){
  if(last<2)throw Error('Không tìm thấy hồ sơ');
  const ids=sh.getRange(2,1,last-1,1).getDisplayValues(),i=ids.findIndex(r=>r[0]===id);
  if(i<0||!validTicketId_(id))throw Error('Không tìm thấy hồ sơ');
- const row=i+2;const previous=sh.getRange(row,12,1,2).getDisplayValues()[0];if(previous[0]===status&&previous[1]===result)return {ok:true,unchanged:true};sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
+ const row=i+2;
+ report=report&&typeof report==='object'?report:{};
+ const supportForm=clean(report.supportForm,30),progress=clean(report.progress,30);
+ if(supportForm&&!SUPPORT_FORMS.includes(supportForm))throw Error('Hình thức hỗ trợ không hợp lệ');
+ if(progress&&!PROGRESS.includes(progress))throw Error('Tiến độ không hợp lệ');
+ const completion=report.completion===''||report.completion==null?'':Number(report.completion);
+ const digitalCount=report.digitalCount===''||report.digitalCount==null?'':Number(report.digitalCount);
+ const documentCount=report.documentCount===''||report.documentCount==null?'':Number(report.documentCount);
+ if(completion!==''&&(!Number.isFinite(completion)||completion<0||completion>100))throw Error('Tỷ lệ hoàn thành phải từ 0 đến 100');
+ if([digitalCount,documentCount].some(n=>n!==''&&(!Number.isInteger(n)||n<0)))throw Error('Số lượng văn bản phải là số nguyên không âm');
+ if(digitalCount!==''&&documentCount!==''&&digitalCount>documentCount)throw Error('Số VBĐT không thể lớn hơn tổng văn bản');
+ const effectiveProgress=status==='Hoàn thành'?'Hoàn thành':progress|| (status==='Đang xử lý'?'Đang tiến hành':'Chờ tiếp nhận');
+ const effectiveCompletion=status==='Hoàn thành'?100:completion;
+ const rate=digitalCount!==''&&documentCount!==''&&documentCount>0?Math.round(digitalCount/documentCount*10000)/100:'';
+ const prior=sh.getRange(row,21,1,7).getValues()[0];
+ const next=[supportForm,effectiveProgress,effectiveCompletion,digitalCount,documentCount,rate,status==='Hoàn thành'?prior[6]||new Date():''];
+ const reportChanged=next.some((v,j)=>j!==6&&String(v)!==String(prior[j]));
+ const previous=sh.getRange(row,12,1,2).getDisplayValues()[0];if(previous[0]===status&&previous[1]===result&&!reportChanged)return {ok:true,unchanged:true};sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
  sh.getRange(row,19).setValue(status==='Hoàn thành');
+ sh.getRange(row,21,1,7).setValues([next]);
+ setupSupportReport_(db());
  const notification=notifyTicketRow_(sh,row);
  return {ok:true,mailSent:!!(notification&&notification.mailSent),mailError:notification&&notification.mailError||''};
 }
