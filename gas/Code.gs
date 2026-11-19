@@ -72,7 +72,7 @@ function createDashboard_(ss){
  let sh=ss.getSheetByName(SHEETS.DASH)||ss.insertSheet(SHEETS.DASH);
  sh.clear();
  sh.getRange('A1:D1').merge().setValue('ỦY BAN MTTQ VIỆT NAM TỈNH AN GIANG – DASHBOARD ADMIN').setBackground('#b91c1c').setFontColor('#ffffff').setFontWeight('bold').setFontSize(15);
- const stats=[['TỔNG HỒ SƠ','=COUNTIF(YeuCau!A2:A,"AG-*")'],['CHỜ TIẾP NHẬN','=COUNTIF(YeuCau!L2:L,"Chờ tiếp nhận")'],['ĐANG XỬ LÝ','=COUNTIF(YeuCau!L2:L,"Đang xử lý")'],['HOÀN THÀNH','=COUNTIF(YeuCau!L2:L,"Hoàn thành")']];
+ const stats=[['TỔNG HỒ SƠ','=COUNTIF(YeuCau!A2:A,"AG-*")'],['CHỜ TIẾP NHẬN','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Chờ tiếp nhận")'],['ĐANG XỬ LÝ','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Đang xử lý")'],['HOÀN THÀNH','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Hoàn thành")']];
  sh.getRange(3,1,stats.length,2).setValues(stats);sh.getRange('A3:A6').setFontWeight('bold');sh.getRange('B3:B6').setFontSize(18).setFontWeight('bold');
  sh.getRange('A8:D8').merge().setValue('QUẢN LÝ: Mở tab YeuCau → lọc trạng thái → nhập kết quả cột M → tích ô HoanThanh cột S.').setWrap(true);
  sh.getRange('A9:D9').merge().setValue('Ảnh minh chứng và ảnh kết quả lưu trong Google Drive riêng; không chia sẻ Sheet hoặc thư mục công khai.').setWrap(true);
