@@ -19,6 +19,15 @@ function setup(){
  ScriptApp.newTrigger('onTicketEdit').forSpreadsheet(ss).onEdit().create();
  return 'Đã cập nhật YeuCau, BaoCaoHoTro, TongQuan; giữ nguyên hồ sơ cũ.';
 }
+/** Khôi phục hiển thị tất cả hồ sơ trên tab YeuCau, không xóa dữ liệu. */
+function hienThiTatCaHoSo(){
+ const sh=db().getSheetByName(SHEETS.TICKETS);
+ const filter=sh.getFilter();
+ if(filter)filter.remove();
+ if(sh.getMaxRows()>1)sh.showRows(2,sh.getMaxRows()-1);
+ setupSupportReport_(db());
+ return 'Đã hiển thị tất cả dòng trong YeuCau và làm mới BaoCaoHoTro. Không xóa dữ liệu.';
+}
 const SUPPORT_FORMS=['Trực tuyến','Trực tiếp'];
 const PROGRESS=['Chờ tiếp nhận','Đang tiến hành','Hoàn thành'];
 function setupSupportReport_(ss){
