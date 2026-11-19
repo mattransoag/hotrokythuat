@@ -126,13 +126,21 @@ function requireAdmin_(token){
  if(typeof token!=='string'||!/^[-a-f0-9]{72}$/.test(token)||CacheService.getScriptCache().get('admin_session_'+token)!=='1')throw Error('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
 }
 function adminLogout(token){if(typeof token==='string')CacheService.getScriptCache().remove('admin_session_'+token);return true}
+function validTicketId_(id){return /^AG-\\d{8}-[A-F0-9]{8}$/.test(String(id||'').trim())}
 function adminListTickets(token){
  requireAdmin_(token);
  const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
- const rows=last<2?[]:sh.getRange(Math.max(2,last-199),1,Math.min(last-1,200),HEADERS.length).getValues();
- const items=rows.reverse().map(r=>({id:String(r[0]),date:String(r[2]),name:String(r[3]),unit:String(r[4]),email:String(r[5]),category:String(r[7]),subject:String(r[9]),detail:String(r[10]),status:String(r[11]),result:String(r[12]||''),image:String(r[15]||''),imageResult:String(r[19]||'')}));
- const statuses=last<2?[]:sh.getRange(2,12,last-1,1).getValues().map(r=>r[0]);
- return {items,stats:{total:last-1,pending:statuses.filter(x=>x==='Chờ tiếp nhận').length,working:statuses.filter(x=>x==='Đang xử lý').length,done:statuses.filter(x=>x==='Hoàn thành').length}};
+ // Chỉ đếm dòng có mã phiếu thật, bỏ qua hàng trống, checkbox và công thức.
+ if(last<2)return {items:[],stats:{total:0,pending:0,working:0,done:0}};
+ const ids=sh.getRange(2,1,last-1,1).getDisplayValues();
+ const validRows=[];
+ for(let i=0;i<ids.length;i++)if(validTicketId_(ids[i][0]))validRows.push(i+2);
+ const counts={total:validRows.length,pending:0,working:0,done:0};
+ const statuses=sh.getRange(2,12,last-1,1).getDisplayValues();
+ validRows.forEach(row=>{const status=statuses[row-2][0];if(status==='Chờ tiếp nhận')counts.pending++;else if(status==='Đang xử lý')counts.working++;else if(status==='Hoàn thành')counts.done++});
+ const recent=validRows.slice(-200).reverse();
+ const items=recent.map(row=>{const r=sh.getRange(row,1,1,HEADERS.length).getDisplayValues()[0];return {id:r[0],date:r[2],name:r[3],unit:r[4],email:r[5],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',image:r[15]||'',imageResult:r[19]||''}});
+ return {items,stats:counts};
 }
 function adminUpdateTicket(token,id,status,result){
  requireAdmin_(token);id=clean(id,50);result=clean(result,5000);
@@ -141,7 +149,7 @@ function adminUpdateTicket(token,id,status,result){
  const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
  if(last<2)throw Error('Không tìm thấy hồ sơ');
  const ids=sh.getRange(2,1,last-1,1).getDisplayValues(),i=ids.findIndex(r=>r[0]===id);
- if(i<0)throw Error('Không tìm thấy hồ sơ');
+ if(i<0||!validTicketId_(id))throw Error('Không tìm thấy hồ sơ');
  const row=i+2;sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
  sh.getRange(row,19).setValue(status==='Hoàn thành');
  notifyTicketRow_(sh,row);
