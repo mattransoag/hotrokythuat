@@ -36,7 +36,7 @@ function submitTicket(p){
   const attachment=saveEvidence_(p.image,id);
   try{sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),'',attachment.url,'','',false,'']);}catch(err){if(attachment.fileId)DriveApp.getFileById(attachment.fileId).setTrashed(true);throw err}
  }finally{lock.releaseLock()}
- logTicket(id,'Tiếp nhận','Yêu cầu mới');
+ logTicket(id,'Tiếp nhận','Yêu cầu mới');refreshDashboard_(db());
  let mailed=false;
  try{MailApp.sendEmail({to:email,subject:'[MTTQ An Giang] Đã tiếp nhận yêu cầu '+id,body:'Kính gửi '+name+',\n\nYêu cầu hỗ trợ của anh/chị đã được tiếp nhận.\nMã phiếu: '+id+'\nMã xác thực: '+code+'\n\nVui lòng giữ kín mã xác thực. Tra cứu tại https://mattransoag.github.io/hotrokythuat/\n\nỦy ban MTTQ Việt Nam tỉnh An Giang.'});mailed=true;}catch(e){logTicket(id,'Lỗi gửi Gmail',String(e).slice(0,250))}
  return {ok:true,id:id,verificationCode:code,emailSent:mailed};
@@ -72,11 +72,22 @@ function createDashboard_(ss){
  let sh=ss.getSheetByName(SHEETS.DASH)||ss.insertSheet(SHEETS.DASH);
  sh.clear();
  sh.getRange('A1:D1').merge().setValue('ỦY BAN MTTQ VIỆT NAM TỈNH AN GIANG – DASHBOARD ADMIN').setBackground('#b91c1c').setFontColor('#ffffff').setFontWeight('bold').setFontSize(15);
- const stats=[['TỔNG HỒ SƠ','=COUNTIF(YeuCau!A2:A,"AG-*")'],['CHỜ TIẾP NHẬN','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Chờ tiếp nhận")'],['ĐANG XỬ LÝ','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Đang xử lý")'],['HOÀN THÀNH','=COUNTIFS(YeuCau!A2:A,"AG-*",YeuCau!L2:L,"Hoàn thành")']];
- sh.getRange(3,1,stats.length,2).setValues(stats);sh.getRange('A3:A6').setFontWeight('bold');sh.getRange('B3:B6').setFontSize(18).setFontWeight('bold');
+ const stats=[['TỔNG HỒ SƠ',0],['CHỜ TIẾP NHẬN',0],['ĐANG XỬ LÝ',0],['HOÀN THÀNH',0]];
+ sh.getRange(3,1,stats.length,2).setValues(stats);refreshDashboard_(ss);sh.getRange('A3:A6').setFontWeight('bold');sh.getRange('B3:B6').setFontSize(18).setFontWeight('bold');
  sh.getRange('A8:D8').merge().setValue('QUẢN LÝ: Mở tab YeuCau → lọc trạng thái → nhập kết quả cột M → tích ô HoanThanh cột S.').setWrap(true);
  sh.getRange('A9:D9').merge().setValue('Ảnh minh chứng và ảnh kết quả lưu trong Google Drive riêng; không chia sẻ Sheet hoặc thư mục công khai.').setWrap(true);
  sh.setColumnWidths(1,4,210);sh.setRowHeight(8,55);sh.setRowHeight(9,55);
+}
+/** Ghi số liệu trực tiếp, không phụ thuộc dấu phân cách công thức theo ngôn ngữ Sheets. */
+function refreshDashboard_(ss){
+ const tickets=ss.getSheetByName(SHEETS.TICKETS),dash=ss.getSheetByName(SHEETS.DASH);
+ if(!tickets||!dash)return;
+ const last=tickets.getLastRow(),counts=[0,0,0,0];
+ if(last>=2){
+  const rows=tickets.getRange(2,1,last-1,12).getDisplayValues();
+  rows.forEach(r=>{if(!validTicketId_(r[0]))return;counts[0]++;if(r[11]==='Chờ tiếp nhận')counts[1]++;else if(r[11]==='Đang xử lý')counts[2]++;else if(r[11]==='Hoàn thành')counts[3]++});
+ }
+ dash.getRange(3,2,4,1).setValues(counts.map(x=>[x]));
 }
 function onOpen(){
  SpreadsheetApp.getUi().createMenu('MTTQ - Quản lý hồ sơ')
@@ -105,7 +116,7 @@ function notifyTicketRow_(sh,row){
  if(r[18]===true){if(!String(r[12]||'').trim()){sh.getRange(row,19).setValue(false);throw Error('Vui lòng nhập Kết quả xử lý (cột M) trước khi hoàn thành.')}sh.getRange(row,12).setValue('Hoàn thành')}
  if(!STATUS.includes(sh.getRange(row,12).getValue()))return;
  const status=sh.getRange(row,12).getValue(),result=String(sh.getRange(row,13).getValue()||'');
- sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);
+ sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);refreshDashboard_(db());
  try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date())}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250))}
 }
 
@@ -140,7 +151,7 @@ function adminListTickets(token){
  validRows.forEach(row=>{const status=statuses[row-2][0];if(status==='Chờ tiếp nhận')counts.pending++;else if(status==='Đang xử lý')counts.working++;else if(status==='Hoàn thành')counts.done++});
  const recent=validRows.slice(-200).reverse();
  const items=recent.map(row=>{const r=sh.getRange(row,1,1,HEADERS.length).getDisplayValues()[0];return {id:r[0],date:r[2],name:r[3],unit:r[4],email:r[5],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',image:r[15]||'',imageResult:r[19]||''}});
- return {items,stats:counts};
+ refreshDashboard_(db());return {items,stats:counts};
 }
 function adminUpdateTicket(token,id,status,result){
  requireAdmin_(token);id=clean(id,50);result=clean(result,5000);
@@ -150,7 +161,7 @@ function adminUpdateTicket(token,id,status,result){
  if(last<2)throw Error('Không tìm thấy hồ sơ');
  const ids=sh.getRange(2,1,last-1,1).getDisplayValues(),i=ids.findIndex(r=>r[0]===id);
  if(i<0||!validTicketId_(id))throw Error('Không tìm thấy hồ sơ');
- const row=i+2;sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
+ const row=i+2;const previous=sh.getRange(row,12,1,2).getDisplayValues()[0];if(previous[0]===status&&previous[1]===result)return {ok:true,unchanged:true};sh.getRange(row,13).setValue(safeCell(result));sh.getRange(row,12).setValue(status);
  sh.getRange(row,19).setValue(status==='Hoàn thành');
  notifyTicketRow_(sh,row);
  return {ok:true};
