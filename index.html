@@ -16,21 +16,21 @@ const labels={request:'Biểu mẫu gửi yêu cầu',lookup:'Tra cứu hồ sơ
 const hosts={request:document.getElementById('request-shell'),lookup:document.querySelector('#lookup .panel'),admin:document.getElementById('admin-shell')};
 const views={request:'send',lookup:'lookup',admin:'admin'};
 const initialized=new Set();
-const fallback=(host,url)=>{const p=document.createElement('p');p.className='muted';p.style.cssText='text-align:center;margin:12px 0';p.append('Nếu biểu mẫu không hiển thị, ');const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='mở trực tiếp tại đây';p.append(a);host.append(p)};
+
 function loadView(id){
  if(!connected||initialized.has(id))return;
  initialized.add(id);
  const host=hosts[id],url=cfg.appsScriptUrl+'?view='+views[id];
  host.replaceChildren();
  const loading=document.createElement('div');loading.setAttribute('role','status');loading.style.cssText='padding:28px;text-align:center;color:#7c3c13;background:#fff8e8;border-radius:12px;font-weight:650';
- loading.innerHTML='<span class="loading-wheel" aria-hidden="true"></span> Đang tải '+labels[id]+'...';
+ loading.textContent='Đang kết nối '+labels[id]+'…';
  host.append(loading);
  const frame=document.createElement('iframe');
  frame.title=labels[id];frame.src=url;frame.loading='eager';
  frame.style.cssText='display:block;width:100%;height:'+(id==='admin'?'1050':'920')+'px;border:0;border-radius:12px;background:white';
  frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
  frame.addEventListener('load',()=>loading.remove(),{once:true});
- host.append(frame);fallback(host,url);
+ host.append(frame);
 }
 function show(id){
  if(!views[id])id='request';
