@@ -167,4 +167,4 @@ function adminUpdateTicket(token,id,status,result){
  return {ok:true,mailSent:!!(notification&&notification.mailSent),mailError:notification&&notification.mailError||''};
 }
 
-function doGet(){return HtmlService.createHtmlOutputFromFile('App').setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
+function doGet(e){const t=HtmlService.createTemplateFromFile('App');t.entryView=e&&e.parameter&&['send','lookup','admin'].includes(e.parameter.view)?e.parameter.view:'send';return t.evaluate().setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
