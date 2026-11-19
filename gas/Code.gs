@@ -190,6 +190,30 @@ function adminListTickets(token){
  const items=recent.map(row=>{const r=sh.getRange(row,1,1,HEADERS.length).getDisplayValues()[0];return {id:r[0],date:r[2],name:r[3],unit:r[4],email:r[5],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',image:r[15]||'',imageResult:r[19]||'',supportForm:r[20]||'',progress:r[21]||'',completion:r[22]===''?'':r[22],digitalCount:r[23]===''?'':r[23],documentCount:r[24]===''?'':r[24],digitalRate:r[25]===''?'':r[25]}});
  refreshDashboard_(db());return {items,stats:counts};
 }
+/** Chỉ Admin đã đăng nhập mới được xem ảnh minh chứng của đúng hồ sơ. */
+function adminGetEvidence(token,ticketId){
+ requireAdmin_(token);
+ ticketId=clean(ticketId,50).toUpperCase();
+ if(!validTicketId_(ticketId))throw Error('Mã hồ sơ không hợp lệ');
+ const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
+ if(last<2)throw Error('Không tìm thấy hồ sơ');
+ const ids=sh.getRange(2,1,last-1,1).getDisplayValues();
+ const i=ids.findIndex(r=>r[0]===ticketId);
+ if(i<0)throw Error('Không tìm thấy hồ sơ');
+ const url=String(sh.getRange(i+2,16).getValue()||'');
+ const match=url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)||url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+ if(!match)throw Error('Hồ sơ không có ảnh minh chứng hợp lệ');
+ const file=DriveApp.getFileById(match[1]);
+ const folderId=PropertiesService.getScriptProperties().getProperty('EVIDENCE_FOLDER_ID');
+ if(!folderId)throw Error('Chưa cấu hình thư mục ảnh');
+ const parents=file.getParents();let belongs=false;
+ while(parents.hasNext())if(parents.next().getId()===folderId)belongs=true;
+ if(!belongs||file.isTrashed())throw Error('Ảnh không thuộc thư mục minh chứng được quản lý');
+ const type=file.getMimeType();
+ if(!['image/jpeg','image/png','image/webp'].includes(type))throw Error('Định dạng ảnh không được hỗ trợ');
+ if(file.getSize()>3*1024*1024)throw Error('Ảnh vượt giới hạn hiển thị 3 MB');
+ return {mime:type,base64:Utilities.base64Encode(file.getBlob().getBytes()),name:file.getName()};
+}
 function adminUpdateTicket(token,id,status,result,report){
  requireAdmin_(token);id=clean(id,50);result=clean(result,5000);
  if(!STATUS.includes(status))throw Error('Trạng thái không hợp lệ');
