@@ -1,6 +1,6 @@
-/** MTTQ An Giang - backend V3.2. Chạy setup() một lần trong Apps Script gắn với Sheet riêng. */
-const SHEETS={TICKETS:'YeuCau',LOG:'LichSu',SETTINGS:'CauHinh'};
-const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao','AnhMinhChung','NguoiPhuTrach','GhiChuNoiBo'];
+/** MTTQ An Giang - backend V3.3 – Một Admin. Chạy setup() một lần trong Apps Script gắn với Sheet riêng. */
+const SHEETS={TICKETS:'YeuCau',LOG:'LichSu',SETTINGS:'CauHinh',DASH:'TongQuan'};
+const HEADERS=['MaPhieu','MaXacThucHash','NgayGui','HoTen','DonVi','Email','DienThoai','NhomHoTro','MucDo','TieuDe','MoTa','TrangThai','KetQua','NgayCapNhat','DaThongBao','AnhMinhChung','NguoiPhuTrach','GhiChuNoiBo','HoanThanh','AnhKetQua'];
 const STATUS=['Chờ tiếp nhận','Đang xử lý','Hoàn thành'];
 function setup(){
  const ss=SpreadsheetApp.getActiveSpreadsheet();if(!ss)throw Error('Hãy mở Apps Script từ Google Sheets mới.');
@@ -9,11 +9,15 @@ function setup(){
  let log=ss.getSheetByName(SHEETS.LOG)||ss.insertSheet(SHEETS.LOG);if(!log.getLastRow())log.appendRow(['ThoiGian','MaPhieu','HanhDong','ChiTiet']);
  let cfg=ss.getSheetByName(SHEETS.SETTINGS)||ss.insertSheet(SHEETS.SETTINGS);if(!cfg.getLastRow())cfg.appendRow(['ThietLap','GiaTri']);
  const validation=SpreadsheetApp.newDataValidation().requireValueInList(STATUS,true).setAllowInvalid(false).build();sh.getRange('L2:L').setDataValidation(validation);
+ sh.getRange('S2:S').insertCheckboxes();
+ sh.getRange('A1:T1').setFontWeight('bold').setBackground('#b91c1c').setFontColor('#ffffff');
+ sh.setFrozenRows(1);if(!sh.getFilter())sh.getRange(1,1,Math.max(2,sh.getLastRow()),HEADERS.length).createFilter();
+ createDashboard_(ss);
  PropertiesService.getScriptProperties().setProperty('SHEET_ID',ss.getId());
  const props=PropertiesService.getScriptProperties();if(!props.getProperty('EVIDENCE_FOLDER_ID')){const folder=DriveApp.createFolder('MTTQ An Giang - Minh chung ho so');props.setProperty('EVIDENCE_FOLDER_ID',folder.getId())}
  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='onTicketEdit').forEach(t=>ScriptApp.deleteTrigger(t));
  ScriptApp.newTrigger('onTicketEdit').forSpreadsheet(ss).onEdit().create();
- return 'Đã tạo các trang YeuCau, LichSu, CauHinh và trình kích hoạt thông báo.';
+ return 'Đã thiết lập YeuCau, LichSu, CauHinh, TongQuan và checkbox HoanThanh.';
 }
 function db(){const id=PropertiesService.getScriptProperties().getProperty('SHEET_ID');if(!id)throw Error('Chưa chạy setup().');return SpreadsheetApp.openById(id)}
 function digest(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8).map(b=>('0'+(b&255).toString(16)).slice(-2)).join('')}
@@ -30,7 +34,7 @@ function submitTicket(p){
   const sh=db().getSheetByName(SHEETS.TICKETS);id='AG-'+Utilities.formatDate(new Date(),'Asia/Ho_Chi_Minh','yyyyMMdd')+'-'+Utilities.getUuid().slice(0,8).toUpperCase();
   code=Utilities.getUuid().replace(/-/g,'').slice(0,12).toUpperCase();
   const attachment=saveEvidence_(p.image,id);
-  try{sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),' ',attachment.url,'','']);}catch(err){if(attachment.fileId)DriveApp.getFileById(attachment.fileId).setTrashed(true);throw err}
+  try{sh.appendRow([id,digest(id+':'+code),new Date(),safeCell(name),safeCell(unit),email,safeCell(phone),category,priority==='Khẩn'?'Khẩn':'Bình thường',safeCell(subject),safeCell(detail),STATUS[0],'',new Date(),'',attachment.url,'','',false,'']);}catch(err){if(attachment.fileId)DriveApp.getFileById(attachment.fileId).setTrashed(true);throw err}
  }finally{lock.releaseLock()}
  logTicket(id,'Tiếp nhận','Yêu cầu mới');
  let mailed=false;
@@ -63,12 +67,45 @@ function lookupTicket(id,code){
  if(r[1]!==digest(id+':'+code))throw Error('Không tìm thấy phiếu hoặc mã xác thực không đúng');
  return {id:r[0],date:String(r[2]),name:r[3],unit:r[4],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',updated:String(r[13])};
 }
+/** Bảng tổng quan riêng tư: chỉ ai được chia sẻ Sheet mới xem được. */
+function createDashboard_(ss){
+ let sh=ss.getSheetByName(SHEETS.DASH)||ss.insertSheet(SHEETS.DASH);
+ sh.clear();
+ sh.getRange('A1:D1').merge().setValue('ỦY BAN MTTQ VIỆT NAM TỈNH AN GIANG – DASHBOARD ADMIN').setBackground('#b91c1c').setFontColor('#ffffff').setFontWeight('bold').setFontSize(15);
+ const stats=[['TỔNG HỒ SƠ','=COUNTA(YeuCau!A2:A)'],['CHỜ TIẾP NHẬN','=COUNTIF(YeuCau!L2:L,"Chờ tiếp nhận")'],['ĐANG XỬ LÝ','=COUNTIF(YeuCau!L2:L,"Đang xử lý")'],['HOÀN THÀNH','=COUNTIF(YeuCau!L2:L,"Hoàn thành")']];
+ sh.getRange(3,1,stats.length,2).setValues(stats);sh.getRange('A3:A6').setFontWeight('bold');sh.getRange('B3:B6').setFontSize(18).setFontWeight('bold');
+ sh.getRange('A8:D8').merge().setValue('QUẢN LÝ: Mở tab YeuCau → lọc trạng thái → nhập kết quả cột M → tích ô HoanThanh cột S.').setWrap(true);
+ sh.getRange('A9:D9').merge().setValue('Ảnh minh chứng và ảnh kết quả lưu trong Google Drive riêng; không chia sẻ Sheet hoặc thư mục công khai.').setWrap(true);
+ sh.setColumnWidths(1,4,210);sh.setRowHeight(8,55);sh.setRowHeight(9,55);
+}
+function onOpen(){
+ SpreadsheetApp.getUi().createMenu('MTTQ - Quản lý hồ sơ')
+ .addItem('Mở Dashboard','openDashboard_')
+ .addItem('Trả lời nhanh: Đã tiếp nhận','quickAcknowledge_')
+ .addItem('Trả lời nhanh: Đang kiểm tra','quickChecking_')
+ .addItem('Đánh dấu hoàn thành hồ sơ đang chọn','completeSelected_')
+ .addToUi();
+}
+function openDashboard_(){SpreadsheetApp.getActive().setActiveSheet(SpreadsheetApp.getActive().getSheetByName(SHEETS.DASH))}
+function selectedTicketRow_(){const sh=SpreadsheetApp.getActiveSheet(),row=sh.getActiveRange().getRow();if(sh.getName()!==SHEETS.TICKETS||row<2)throw Error('Hãy chọn một dòng hồ sơ trong tab YeuCau.');return {sh,row}}
+function quickAcknowledge_(){setQuickResult_('Đã tiếp nhận yêu cầu. Đang kiểm tra và sẽ phản hồi khi có kết quả.')}
+function quickChecking_(){setQuickResult_('Đang kiểm tra sự cố. Vui lòng chờ cập nhật tiếp theo.')}
+function setQuickResult_(message){const o=selectedTicketRow_();o.sh.getRange(o.row,13).setValue(message);o.sh.getRange(o.row,12).setValue('Đang xử lý');notifyTicketRow_(o.sh,o.row)}
+function completeSelected_(){const o=selectedTicketRow_();o.sh.getRange(o.row,19).setValue(true);notifyTicketRow_(o.sh,o.row)}
 function onTicketEdit(e){
- if(!e||!e.range||e.range.getSheet().getName()!==SHEETS.TICKETS||e.range.getColumn()!==12||e.range.getRow()<2)return;
- const sh=e.range.getSheet(),row=e.range.getRow(),r=sh.getRange(row,1,1,HEADERS.length).getValues()[0];
- if(!STATUS.includes(r[11]))return;
- sh.getRange(row,14).setValue(new Date());
- logTicket(r[0],'Cập nhật trạng thái',r[11]);
- try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Yêu cầu '+r[0]+' đã được cập nhật trạng thái: '+r[11]+'.\nKết quả: '+(r[12]||'Chưa có')+'\n\nTra cứu bằng mã phiếu và mã xác thực đã gửi trước đó.'});sh.getRange(row,15).setValue(new Date());}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250))}
+ if(!e||!e.range||e.range.getSheet().getName()!==SHEETS.TICKETS||e.range.getRow()<2)return;
+ const col=e.range.getColumn();if(![12,13,19].includes(col))return;
+ const sh=e.range.getSheet(),row=e.range.getRow();
+ if(col===19&&e.range.getValue()!==true)return;
+ if(col===13)return; // ghi kết quả trước, chỉ gửi khi thay đổi trạng thái hoặc hoàn thành
+ notifyTicketRow_(sh,row);
+}
+function notifyTicketRow_(sh,row){
+ const r=sh.getRange(row,1,1,HEADERS.length).getValues()[0];
+ if(r[18]===true){if(!String(r[12]||'').trim()){sh.getRange(row,19).setValue(false);throw Error('Vui lòng nhập Kết quả xử lý (cột M) trước khi hoàn thành.')}sh.getRange(row,12).setValue('Hoàn thành')}
+ if(!STATUS.includes(sh.getRange(row,12).getValue()))return;
+ const status=sh.getRange(row,12).getValue(),result=String(sh.getRange(row,13).getValue()||'');
+ sh.getRange(row,14).setValue(new Date());logTicket(r[0],'Cập nhật trạng thái',status);
+ try{MailApp.sendEmail({to:r[5],subject:'[MTTQ An Giang] Cập nhật phiếu '+r[0],body:'Mã phiếu: '+r[0]+'\nTrạng thái: '+status+'\nKết quả: '+(result||'Chưa có')+'\n\nVui lòng tra cứu bằng mã phiếu và mã xác thực đã nhận.'});sh.getRange(row,15).setValue(new Date())}catch(err){logTicket(r[0],'Lỗi gửi Gmail',String(err).slice(0,250))}
 }
 function doGet(){return HtmlService.createHtmlOutputFromFile('App').setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1')}
