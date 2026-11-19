@@ -167,4 +167,26 @@ function adminUpdateTicket(token,id,status,result){
  return {ok:true,mailSent:!!(notification&&notification.mailSent),mailError:notification&&notification.mailError||''};
 }
 
+/** Đếm phiên truy cập công khai, không lưu IP, email hoặc dữ liệu cá nhân. */
+function getPublicVisitStats(visitorId){
+ const props=PropertiesService.getScriptProperties();
+ const tz=Session.getScriptTimeZone()||'Asia/Ho_Chi_Minh';
+ const day=Utilities.formatDate(new Date(),tz,'yyyyMMdd');
+ const dailyKey='VISITS_DAY_'+day;
+ const totalKey='VISITS_TOTAL';
+ const key=String(visitorId||'').trim();
+ const valid=/^[a-zA-Z0-9_-]{16,80}$/.test(key);
+ const cache=CacheService.getScriptCache();
+ const lock=LockService.getScriptLock();
+ lock.waitLock(10000);
+ try{
+  const cacheKey=valid?'visitor_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,key)).slice(0,45):'';
+  if(!valid||!cache.get(cacheKey)){
+   props.setProperty(dailyKey,String(Number(props.getProperty(dailyKey)||0)+1));
+   props.setProperty(totalKey,String(Number(props.getProperty(totalKey)||0)+1));
+   if(valid)cache.put(cacheKey,'1',21600);
+  }
+  return {today:Number(props.getProperty(dailyKey)||0),total:Number(props.getProperty(totalKey)||0)};
+ }finally{lock.releaseLock()}
+}
 function doGet(e){const t=HtmlService.createTemplateFromFile('App');t.entryView=e&&e.parameter&&['send','lookup','admin'].includes(e.parameter.view)?e.parameter.view:'send';return t.evaluate().setTitle('Hỗ trợ kỹ thuật MTTQ An Giang').addMetaTag('viewport','width=device-width,initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)}
