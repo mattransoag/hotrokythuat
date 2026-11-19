@@ -80,6 +80,18 @@ function lookupTicket(id,code){
  if(r[1]!==digest(id+':'+code))throw Error('Không tìm thấy phiếu hoặc mã xác thực không đúng');
  return {id:r[0],date:String(r[2]),name:r[3],unit:r[4],category:r[7],subject:r[9],detail:r[10],status:r[11],result:r[12]||'',updated:String(r[13])};
 }
+/** Tra cứu công khai bằng mã phiếu: chỉ trả trạng thái, không tiết lộ dữ liệu cá nhân. */
+function lookupTicketById(id){
+ id=clean(id,50).toUpperCase();
+ if(!/^AG-[0-9]{8}-[A-F0-9]{8}$/.test(id))throw Error('Mã hồ sơ không hợp lệ');
+ const sh=db().getSheetByName(SHEETS.TICKETS),last=sh.getLastRow();
+ if(last<2)throw Error('Không tìm thấy mã hồ sơ');
+ const ids=sh.getRange(2,1,last-1,1).getDisplayValues();
+ const index=ids.findIndex(r=>r[0]===id);
+ if(index<0)throw Error('Không tìm thấy mã hồ sơ');
+ const r=sh.getRange(index+2,1,1,HEADERS.length).getValues()[0];
+ return {id:r[0],status:r[11]||'Chờ tiếp nhận',updated:r[13]?Utilities.formatDate(new Date(r[13]),Session.getScriptTimeZone(),'dd/MM/yyyy HH:mm'):''};
+}
 /** Bảng tổng quan riêng tư: chỉ ai được chia sẻ Sheet mới xem được. */
 function createDashboard_(ss){
  let sh=ss.getSheetByName(SHEETS.DASH)||ss.insertSheet(SHEETS.DASH);
